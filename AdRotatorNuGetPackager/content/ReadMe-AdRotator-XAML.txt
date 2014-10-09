@@ -3,6 +3,7 @@ Welcome to AdRotator for XAML projects includng Windows 8 and Windows Phone Silv
 Included in this package is:
 
 * This Readme :D
+* ReleaseNotes
 * AdRotator DLL's
 * Sample "DefaultAdSetings.XML" configuration file
 
@@ -16,8 +17,11 @@ We no longer include Ad Provider specific DLL's, you need to obtain the latest v
 * AdMob - https://developers.google.com/mobile-ads-sdk/download
 * Innerative - https://console.inner-active.com/iamp/wiki (need to be logged in)
 * Inmobi - http://www.inmobi.com/developers/download-center/
+* DefaulthouseAds - Build your own :D
 
 ---
+**At this time we have not tested AdRotator with Universal projects, please feed back any issues to the GitHub page - https://github.com/Adrotator/AdrotatorV2
+
 
 To implement this control add the following XAML to your project:
 Add a custom namespace to the AdRotator Control, e.g.:
@@ -31,7 +35,7 @@ Then add the control to your page:
 (We recommend using a UserControl in your project for implementation especially if you intend to use it on several pages)
 
 	<adRotator:AdRotatorControl 
-		x:Name="AdRotator"
+		x:Name="MyAdRotatorControl"
 		AdHeight="90"
 		AdWidth="728"
 		LocalSettingsLocation="defaultAdSettings.xml"
@@ -45,25 +49,45 @@ AdRotator at this time does NOT support relative paths so the local configuratio
 
 	DefaultSettingsFileUri="/<project assembly name>;component/defaultAdSettings.xml" <-- Not supported
 
-If you need to share a configuration file between projects then "Link" the configuration file from a central flder or just use remote configuration.
+If you need to share a configuration file between projects then "Link" the configuration file from a central folder or just use remote configuration.
  
 Lastly configure the XML configuration file (optionally host it on the web to allow remote configuration) for your Ad Provider settings or alternatively set the providers in the XAML
 
 For more instructions on how to implement this control and all the other configuration options checkout the AdRotator host site
 http://getadrotator.com
 
-** PubCenter support for Windows 8
-In order to support PubCenter due to the way the control is implemented in Windows 8/8.1, you need to pass the reference to the assembly in your project.
-Simply install the Windows 8/8.1 SDK as normal and reference the "Microsoft Advertising SDK", then include the following in the page code behind constuctor.
+** PubCenter and AdDuplex support for Windows 8
+In order to support WinRT controls on Windows 8, like those now used by PubCenter and AdDuplex, you need to pass a reference to the assembly in your project.
+
+For Pubcenter, install the Windows 8/8.1 SDK as normal and reference the "Microsoft Advertising SDK", then include the following in the page code behind constructor.
+Note - name of your control, this uses your XAML or programmatic instance
+
+	MyAdRotatorControl.PlatformAdProviderComponents.Add(AdRotator.Model.AdType.PubCenter, typeof(Microsoft.Advertising.WinRT.UI.AdControl));
 	
-	AdRotatorControl.PlatformAdProviderComponents.Add(AdRotator.Model.AdType.PubCenter, typeof(Microsoft.Advertising.NETFX_CORE.UI.AdControl));
-This enables AdRotator to access the local WinMD component.
-For further examples check the example projects in the codeplex source.
+For AdDuplex, add the control via NuGet using the AdDuplex SDK for Windows8 (Xaml edition) NuGet package, then include the following in the page code behind constructor.
+Note - name of your control, this uses your XAML or programmatic instance
+
+	MyAdRotatorControl.PlatformAdProviderComponents.Add(AdRotator.Model.AdType.AdDuplex, typeof(AdDuplex.Controls.AdControl));
+
+This enables AdRotator to access the local WinMD components for each control.
+
+***For Unity, these references need to go in your App.XAML.cs constructor and look as follows:
+	//PubCenter
+	AdRotatorUnitySDK.Integration.AdRotatorBridge.PlatformAdProviderComponents.Add(AdRotator.Model.AdType.PubCenter, typeof(Microsoft.Advertising.WinRT.UI.AdControl));
+	//AdDuplex
+	AdRotatorUnitySDK.Integration.AdRotatorBridge.PlatformAdProviderComponents.Add(AdRotator.Model.AdType.AdDuplex, typeof(AdDuplex.Controls.AdControl));
+
+
+For further examples check the example projects in the GitHub source @ https://github.com/Adrotator/AdrotatorV2
 
 ***Note
 This version of V2 also now supports our Unity plug-in for Windows 8 & Windows Phone 8 solutions.  Further details on the above site.
 
+Final Note
+----------
+If you are using AdRotator and it is helping you to be more profitable, please consider donating to help support further development and support.
+http://getadrotator.com/
 
 The AdRotator Team
-Simon Jackson (http://darkgenesis.zenithmoon.com)
-Gergely Orosz (http://gregdoesit.com)
+Simon Jackson @SimonDarksideJ (http://darkgenesis.zenithmoon.com)
+Gergely Orosz @GergelyOrosz (http://gregdoesit.com)

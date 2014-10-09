@@ -8,10 +8,12 @@ using System.Windows.Controls;
 using System.Windows;
 using System.ComponentModel;
 using System.Windows.Media.Animation;
+using System.Windows.Media;
 #else
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Animation;
+using Windows.UI.Xaml.Media;
 #endif
 
 // The Templated Control item template is documented at http://go.microsoft.com/fwlink/?LinkId=234235
@@ -23,12 +25,15 @@ namespace AdRotator
         private int AdRotatorControlID;
         private static FileHelpers fileHelper = new FileHelpers();
         private AdRotatorComponent adRotatorControl = new AdRotatorComponent(CultureInfo.CurrentUICulture.ToString(), fileHelper);
+
 #if WINDOWS_PHONE
 #if WP7
         AdRotator.AdProviderConfig.SupportedPlatforms CurrentPlatform = AdRotator.AdProviderConfig.SupportedPlatforms.WindowsPhone7;
 #else
         AdRotator.AdProviderConfig.SupportedPlatforms CurrentPlatform = AdRotator.AdProviderConfig.SupportedPlatforms.WindowsPhone8;
 #endif
+#elif WINDOWS_PHONE_APP
+        AdRotator.AdProviderConfig.SupportedPlatforms CurrentPlatform = AdRotator.AdProviderConfig.SupportedPlatforms.WindowsPhone81Appx;
 #else
         AdRotator.AdProviderConfig.SupportedPlatforms CurrentPlatform = AdRotator.AdProviderConfig.SupportedPlatforms.Windows8;
 #endif
@@ -62,21 +67,24 @@ namespace AdRotator
                     AdType.PubCenter, 
                     AdType.Inmobi,
                     AdType.DefaultHouseAd,
+                    AdType.None,
 #if WINDOWS_PHONE
+#if !WP7
+                    AdType.AdMob,
+#endif
                     AdType.Smaato,
                     AdType.MobFox,
-                    AdType.AdMob,
                     AdType.InnerActive,
 #endif
                 };
             adRotatorControl.Log += (s) => OnLog(AdRotatorControlID,s);
         }
 
-        private Grid AdRotatorRoot
+        private Border AdRotatorRoot
         {
             get
             {
-                return GetTemplateChild("AdRotatorRoot") as Grid;
+                return GetTemplateChild("AdRotatorRoot") as Border;
             }
         }
 
@@ -85,14 +93,7 @@ namespace AdRotator
 #if WINDOWS_PHONE
             await Dispatcher.InvokeAsync(() => Invalidate(adProvider));
 #else
-            if (Window.Current != null)
-            {
-                var dispatcher = Window.Current.Dispatcher;
-
-                if (dispatcher.HasThreadAccess)
-                    await Invalidate(adProvider);
-                else await dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => Invalidate(adProvider));
-            }
+            await Windows.ApplicationModel.Core.CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => Invalidate(adProvider));
 #endif
         }
 
@@ -107,6 +108,15 @@ namespace AdRotator
         {
             base.OnApplyTemplate();
             templateApplied = true;
+            if (IsLoaded)
+            {
+                try
+                {
+                    adRotatorControl.AdAvailable -= adRotatorControl_AdAvailable;
+                }
+                catch { }
+                adRotatorControl.AdAvailable += adRotatorControl_AdAvailable;
+            }
         }
         void AdRotatorControl_Loaded(object sender, RoutedEventArgs e)
         {
@@ -114,7 +124,7 @@ namespace AdRotator
             // b/c dependency properties are propagated to their values at this point
             if (IsInDesignMode)
             {
-                AdRotatorRoot.Children.Add(new TextBlock() { Text = "AdRotator in design mode, No ads will be displayed", VerticalAlignment = VerticalAlignment.Center });
+                AdRotatorRoot.Child = new TextBlock() { Text = "AdRotator in design mode, No ads will be displayed", VerticalAlignment = VerticalAlignment.Center };
             }
             else if (templateApplied)
             {
@@ -122,12 +132,13 @@ namespace AdRotator
                 adRotatorControl.AdAvailable += adRotatorControl_AdAvailable;
                 if (AutoStartAds)
                 {
-                    adRotatorControl.GetConfig();
                     if (!adRotatorControl.adRotatorRefreshIntervalSet)
                     {
                         adRotatorControl.StartAdTimer();
                     }
                 }
+
+                //Work out how to position Ad off screen (set hidden = true) on startup
             }
             OnAdRotatorReady();
 
@@ -136,6 +147,11 @@ namespace AdRotator
 
         public async Task<string> Invalidate(AdProvider adProvider)
         {
+            if (!IsAdRotatorEnabled)
+            {
+                OnLog(AdRotatorControlID, "Control is not enabled");
+                return "Control Disabled";
+            } 
             if (adProvider == null)
             {
                 adRotatorControl.GetAd(null);
@@ -144,15 +160,7 @@ namespace AdRotator
             if (adProvider.AdProviderType == AdType.None)
             {
                 return adRotatorControl.AdsFailed();
-            }
-            if (!IsAdRotatorEnabled)
-            {
-                OnLog(AdRotatorControlID, "Control is not enabled");
-                return "Control Disabled";
-            }
-            if (!adRotatorControl.AnalyticsInitilised)
-            {
-                adRotatorControl.InitialiseAnalytics(CurrentPlatform);
+
             }
 
             if (SlidingAdDirection != AdSlideDirection.None && !_slidingAdTimerStarted)
@@ -192,8 +200,8 @@ namespace AdRotator
                 return "No Ad Returned";
             }
 
-            AdRotatorRoot.Children.Clear();
-            AdRotatorRoot.Children.Add((FrameworkElement)providerElement);
+            AdRotatorRoot.Child = null;
+            AdRotatorRoot.Child = (FrameworkElement)providerElement;
             return adProvider.AdProviderType.ToString();
         }
 
@@ -457,7 +465,7 @@ namespace AdRotator
             set { SetValue(AutoStartAdsProperty, value); }
         }
 
-        // Using a DependencyProperty as the backing store for IsAdRotatorEnabled.  This enables animation, styling, binding, etc...
+        // Using a DependencyProperty as the backing store for AutoStart Ads, this determines if the control automatically starts getting ads or waits for Invalidate
         public static readonly DependencyProperty AutoStartAdsProperty =
             DependencyProperty.Register("AutoStartAds", typeof(bool), typeof(AdRotatorControl), new PropertyMetadata(false, AutoStartAdsPropertyChanged));
 
@@ -473,6 +481,32 @@ namespace AdRotator
         private void OnAutoStartAdsPropertyChanged(DependencyPropertyChangedEventArgs e)
         {
             adRotatorControl.autoStartAds = (bool)e.NewValue;
+        }
+        #endregion
+
+        #region AdRetrievalMode
+        public AdMode AdRetrievalMode
+        {
+            get { return (AdMode)adRotatorControl.adMode; }
+            set { SetValue(AdRetrievalModeProperty, value); }
+        }
+
+        // Using a DependencyProperty as the backing store for AdRetrievalMode.  This sets the ad retrieval mode for AdRotator
+        public static readonly DependencyProperty AdRetrievalModeProperty =
+            DependencyProperty.Register("AdRetrievalMode", typeof(AdMode), typeof(AdRotatorControl), new PropertyMetadata(AdMode.Random, AdRetrievalModePropertyChanged));
+
+        private static void AdRetrievalModePropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var sender = d as AdRotatorControl;
+            if (sender != null)
+            {
+                sender.OnAdRetrievalModePropertyChanged(e);
+            }
+        }
+
+        private void OnAdRetrievalModePropertyChanged(DependencyPropertyChangedEventArgs e)
+        {
+            adRotatorControl.adMode = (AdMode)e.NewValue;
         }
         #endregion
 
@@ -508,90 +542,6 @@ namespace AdRotator
             adRotatorControl.adRotatorRefreshIntervalSet = true;
             adRotatorControl.StartAdTimer();
         }
-        #endregion
-
-        #region GoogleAnalytics
-
-        #region GoogleAnalyticsId
-        public string GoogleAnalyticsId
-        {
-            get { return (string)adRotatorControl.GoogleAnalyticsId; }
-            set { SetValue(GoogleAnalyticsIdProperty, value); }
-        }
-
-        /// <summary>
-        /// Sets the Ad Refresh rate in seconds
-        /// *Note minimum is 60 seconds
-        /// </summary>
-        public static readonly DependencyProperty GoogleAnalyticsIdProperty =
-            DependencyProperty.Register("GoogleAnalyticsId", typeof(string), typeof(AdRotatorControl), new PropertyMetadata(string.Empty, GoogleAnalyticsIdChanged));
-
-        private static void GoogleAnalyticsIdChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            var sender = d as AdRotatorControl;
-            if (sender != null)
-            {
-                sender.GoogleAnalyticsIdPropertyChanged(e);
-            }
-        }
-
-        private void GoogleAnalyticsIdPropertyChanged(DependencyPropertyChangedEventArgs e)
-        {
-            adRotatorControl.GoogleAnalyticsId = (string)e.NewValue;
-        }
-        #endregion
-
-        #region GoogleAnalyticsControl
-        public object GoogleAnalyticsControl
-        {
-            get { return adRotatorControl.GoogleAnalyticsControl; }
-            set { adRotatorControl.GoogleAnalyticsControl = value; }
-        }
-
-        #endregion
-
-        #endregion
-
-        #region FlurryAnalytics
-
-        #region FlurryAnalyticsId
-        public string FlurryAnalyticsId
-        {
-            get { return (string)adRotatorControl.FlurryAnalyticsId; }
-            set { SetValue(FlurryAnalyticsIdProperty, value); }
-        }
-
-        /// <summary>
-        /// Sets the Ad Refresh rate in seconds
-        /// *Note minimum is 60 seconds
-        /// </summary>
-        public static readonly DependencyProperty FlurryAnalyticsIdProperty =
-            DependencyProperty.Register("FlurryAnalyticsId", typeof(string), typeof(AdRotatorControl), new PropertyMetadata(string.Empty, FlurryAnalyticsIdChanged));
-
-        private static void FlurryAnalyticsIdChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            var sender = d as AdRotatorControl;
-            if (sender != null)
-            {
-                sender.FlurryAnalyticsIdPropertyChanged(e);
-            }
-        }
-
-        private void FlurryAnalyticsIdPropertyChanged(DependencyPropertyChangedEventArgs e)
-        {
-            adRotatorControl.FlurryAnalyticsId = (string)e.NewValue;
-        }
-        #endregion
-
-        #region FlurryAnalyticsControl
-        public object FlurryAnalyticsControl
-        {
-            get { return adRotatorControl.FlurryAnalyticsControl; }
-            set { adRotatorControl.FlurryAnalyticsControl = value; }
-        }
-
-        #endregion
-
         #endregion
 
         #endregion
@@ -638,8 +588,14 @@ namespace AdRotator
 
         private void SetupAnimationBounds(AdSlideDirection adSlideDirection)
         {
+            double displayOffsetX = 0, displayOffsetY = 0;
             if (AdRotatorRoot != null)
             {
+                ((DoubleAnimation)SlideOutLRAdStoryboard.Children[0]).To = 0;
+                ((DoubleAnimation)SlideInLRAdStoryboard.Children[0]).From = 0;
+                ((DoubleAnimation)SlideOutUDAdStoryboard.Children[0]).To = 0;
+                ((DoubleAnimation)SlideInUDAdStoryboard.Children[0]).From = 0;
+
 #if WINDOWS_PHONE
                 var bounds = AdRotatorControl.DisplayResolution;
 #else
@@ -648,28 +604,19 @@ namespace AdRotator
                 switch (adSlideDirection)
                 {
                     case AdSlideDirection.Left:
-                        ((DoubleAnimation)SlideOutLRAdStoryboard.Children[0]).To = -(bounds.Width * 2);
-                        ((DoubleAnimation)SlideInLRAdStoryboard.Children[0]).From = -(bounds.Width * 2);
+                        displayOffsetX = -(bounds.Width * 2);
                         break;
                     case AdSlideDirection.Right:
-                        ((DoubleAnimation)SlideOutLRAdStoryboard.Children[0]).To = bounds.Width * 2;
-                        ((DoubleAnimation)SlideInLRAdStoryboard.Children[0]).From = bounds.Width * 2;
+                        displayOffsetX = bounds.Width * 2;
                         break;
                     case AdSlideDirection.Bottom:
-                        ((DoubleAnimation)SlideOutUDAdStoryboard.Children[0]).To = bounds.Height * 2;
-                        ((DoubleAnimation)SlideInUDAdStoryboard.Children[0]).From = bounds.Height * 2;
+                        displayOffsetY = bounds.Height * 2;
                         break;
                     case AdSlideDirection.Top:
-                        ((DoubleAnimation)SlideOutUDAdStoryboard.Children[0]).To = -(bounds.Height * 2);
-                        ((DoubleAnimation)SlideInUDAdStoryboard.Children[0]).From = -(bounds.Height * 2);
-                        break;
-                    default:
-                        ((DoubleAnimation)SlideOutLRAdStoryboard.Children[0]).To = 0;
-                        ((DoubleAnimation)SlideInLRAdStoryboard.Children[0]).From = 0;
-                        ((DoubleAnimation)SlideOutUDAdStoryboard.Children[0]).To = 0;
-                        ((DoubleAnimation)SlideInUDAdStoryboard.Children[0]).From = 0;
+                        displayOffsetY = -(bounds.Height * 2);
                         break;
                 }
+                AdRotatorRoot.RenderTransform = new CompositeTransform() { TranslateX = displayOffsetX, TranslateY = displayOffsetY };
             }
         }
 
@@ -709,17 +656,17 @@ namespace AdRotator
         #endregion
 
         #region Animation Events
-        private async void SlideOutAdStoryboard_Completed(object sender, object e)
+        private void SlideOutAdStoryboard_Completed(object sender, object e)
         {
             _slidingAdHidden = true;
-            await Invalidate(null);
-            ResetSlidingAdTimer(SlidingAdHiddenSeconds);
+            ResetSlidingAdTimer(SlidingAdDisplaySeconds);
         }
 
-        private void SlideInAdStoryboard_Completed(object sender, object e)
+        private async void SlideInAdStoryboard_Completed(object sender, object e)
         {
             _slidingAdHidden = false;
-            ResetSlidingAdTimer(SlidingAdDisplaySeconds);
+            await Invalidate(null);
+            ResetSlidingAdTimer(SlidingAdHiddenSeconds);
         }
 
         private void ResetSlidingAdTimer(int durationInSeconds)
@@ -867,7 +814,10 @@ namespace AdRotator
 
         public void Dispose()
         {
-            AdRotatorRoot.Children.Clear();
+            if (AdRotatorRoot != null && AdRotatorRoot.Child != null)
+            {
+                AdRotatorRoot.Child = null;
+            }
             //providerElement = null;
             DefaultHouseAdBody = null;
         }

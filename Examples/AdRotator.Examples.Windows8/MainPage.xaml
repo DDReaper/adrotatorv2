@@ -6,7 +6,6 @@
     xmlns:adRotator="using:AdRotator"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:UI="using:Microsoft.Advertising.NETFX_CORE.UI"
     mc:Ignorable="d">
 
     <Grid Background="{StaticResource ApplicationPageBackgroundThemeBrush}">
@@ -16,7 +15,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <adRotator:AdRotatorControl
-            x:Name="AdRotatorControl"
+            x:Name="MyAdRotatorControl"
             BorderBrush="AliceBlue"
             BorderThickness="20"
             AdRefreshInterval="10"
@@ -25,10 +24,13 @@
             VerticalAlignment="Center"
             HorizontalAlignment="Center"
             LocalSettingsLocation="defaultAdSettings.xml"
-            SlidingAdDirection="Left"
+            SlidingAdDirection="None"
             IsTest="True"
             AutoStartAds="True"
-            GoogleAnalyticsId="UA-51978219-1">
+            SlidingAdDisplaySeconds="5"
+            SlidingAdHiddenSeconds="1"
+            AdRetrievalMode="Stepped"
+            >
         </adRotator:AdRotatorControl>
         <Grid Grid.Row="1" x:Name="ProgramaticAdRotator"/>
         <Button Grid.Row="2" x:Name="HideButton" Content="Hide/unhide AdRotator" Tapped="HideButton_Tapped"/>
